@@ -889,11 +889,34 @@ function touch() {
 const stage = document.getElementById("stage"), world = document.getElementById("world");
 const applyView = () => {
   world.style.transform = `translate(${ox}px,${oy}px) scale(${z})`;
+  rememberView();
   if (editing !== null) {
     const b = document.getElementById("svg")._nodes?.get(editing);
     if (b) positionEditor(b);
   }
 };
+
+// Remembered per browser, because where you are looking is not part of the
+// document and must not travel with it. Written on every change of view so a
+// reload lands where you left off.
+const VIEW_KEY = "mindmap.view";
+
+function rememberView() {
+  try {
+    localStorage.setItem(VIEW_KEY, JSON.stringify({ z, ox, oy }));
+  } catch (e) { /* private mode, or a full store: losing the view is survivable */ }
+}
+
+// Returns false when there is nothing to restore, so a first visit still fits.
+function restoreView() {
+  try {
+    const v = JSON.parse(localStorage.getItem(VIEW_KEY) || "null");
+    if (!v || !isFinite(v.z) || !isFinite(v.ox) || !isFinite(v.oy)) return false;
+    z = v.z; ox = v.ox; oy = v.oy;
+    applyView();
+    return true;
+  } catch (e) { return false; }
+}
 
 function fit() {
   const svg = document.getElementById("svg");
@@ -1495,7 +1518,7 @@ function setView(v) {
   document.getElementById("outline").classList.toggle("on", v === "outline");
   document.getElementById("bview").textContent = v === "map" ? "outline" : "map";
   paint();
-  if (v === "map") fit();
+  if (v === "map" && !restoreView()) fit();
 }
 
 // ---------------------------------------------------------------- find
@@ -1610,7 +1633,8 @@ async function load() {
   document.getElementById("src").value = doc;
   if (r.at) setMeta(r.n, r.at);
   else document.getElementById("meta").textContent = "new document";
-  render(); fit();
+  render();
+  if (!restoreView()) fit();
 }
 
 async function save() {
